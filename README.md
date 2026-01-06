@@ -1,56 +1,70 @@
 # Recommender Systems
 
-This repository contains my coursework, experiments, and projects focused on building and evaluating various recommendation algorithms.
+This repository contains my graduate-level coursework and independent experiments focused on building, optimizing, and evaluating recommendation algorithms. The projects range from Deep Learning-based Collaborative Filtering using PyTorch to Content-Based systems leveraging NLP on massive unstructured datasets.
 
-## Project: Content-Based Movie Recommender System
+## Tech Stack & Skills
+* **Core:** Python, PyTorch (GPU), Scikit-learn, Pandas, NumPy
+* **Techniques:** Matrix Factorization, Neural Collaborative Filtering (NCF), TF-IDF, Cosine Similarity, Grid Search
+* **Optimization:** AdamW, ReduceLROnPlateau, Early Stopping, Gradient Descent
+* **Engineering:** GPU Acceleration, Pre-loaded GPU Tensors, Parquet Checkpointing
+* **Environment:** Google Colab Pro (High-RAM & GPU Runtime)
 
-**Folder:** `genome-2021-movie-recommender`
-**Notebook:** `content-based-movie-recommender.ipynb`
+---
 
-### Introduction
+## `ml-100k-parameter-optimizer`: Optimized Collaborative Filtering & NCF
+**Dataset:** [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/)
 
-The Content-Based Movie Recommender System is a machine learning project developed as a graduate-level assignment for a Recommender Systems course. It is designed to suggest movies to users based on the textual content of raw reviews. Unlike systems that rely on pre-existing metadata or tags, this project utilizes Natural Language Processing (NLP) to analyze over 2.6 million raw reviews from the MovieLens dataset. The primary objective is to predict user ratings and provide Top-N recommendations, evaluating performance against non-personalized baselines.
+### Implementation Details
+This project benchmarks five distinct model architectures to minimize prediction error (RMSE) on sparse user-item interaction data.
 
-This project was developed as a graduate-level assignment for a Recommender Systems course.
+* **Architecture:** Models were implemented in PyTorch. To maximize training speed, the entire dataset was converted to tensors and loaded directly onto the GPU to eliminate data transfer overhead.
+* **Optimization:** Training utilized the **AdamW** optimizer (to decouple weight decay) and a **ReduceLROnPlateau** scheduler (halving the learning rate after 2 epochs of stagnation).
+* **Grid Search:** An extensive search was performed across 125 combinations of embedding dimensions (8-128), learning rates, and regularization strengths.
+* **Hardware:** Executed on **Google Colab Pro** to support intensive grid search iterations and GPU-resident training.
 
-### Key Features
+### Results
+Models were evaluated using 5-Fold Cross-Validation. The optimal configuration was found to be `Embedding Dim=32`, `LR=0.005`, and `Reg=1e-06`.
 
-* **NLP Data Pipeline:** Aggregates and cleans millions of raw text reviews (lowercasing, stopword removal) to generate unique content profiles for over 52,000 movies.
-* **Optimized Data Loading:** Implements Parquet file checkpointing to efficiently load pre-processed text data, bypassing time-consuming cleaning steps during repeated runs.
-* **TF-IDF Recommender:** Calculates movie similarity based on word importance using Term Frequency-Inverse Document Frequency and Cosine Similarity.
-* **Binary/Jaccard Recommender:** Calculates movie similarity based on simple word presence using Binary Counts and Jaccard Similarity.
-* **On-the-Fly Evaluation:** Utilizes a memory-efficient prediction loop that calculates similarity scores dynamically to prevent RAM crashes associated with massive matrices.
-* **Performance Metrics:** Evaluates models using **Mean Absolute Error (MAE)** for rating accuracy and **Hit Ratio** for recommendation quality.
+| Model Architecture | Test RMSE |
+| :--- | :---: |
+| **Matrix Factorization (w/ Bias)** | **0.9602** |
+| Matrix Factorization (No Bias) | 0.9640 |
+| Neural Collaborative Filtering | 1.7150 |
+| NCF (No Bias) | 1.6069 |
+| Bias Only Baseline | 2.7879 |
 
-### Technologies Used
+*Finding:* The Matrix Factorization with Bias model achieved the lowest RMSE and fastest convergence, significantly outperforming the Neural Network (NCF) architectures on this specific dataset.
 
-* **Python:** Primary language for analysis and modeling.
-* **Google Colab Pro:** Cloud environment (High-RAM runtime is required for this dataset).
-* **Pandas:** Data manipulation and aggregation of large datasets.
-* **Scikit-learn:** Vectorization (TF-IDF, CountVectorizer), similarity calculations, and metrics.
-* **NLTK:** Natural language preprocessing and stopword removal.
-* **Google Drive:** Persistent storage for the dataset and checkpoint files.
+![Learning Curve Comparison](ml-100k-parameter-optimizer/learning-curve2.png)
+*Figure 1: Validation RMSE over 100 epochs. The Matrix Factorization model (Green) converges faster than Neural Network architectures.*
 
-### Dataset
+![Embedding Size Analysis](ml-100k-parameter-optimizer/embedding_analysis.png)
+*Figure 2: Impact of embedding size on error. Performance degrades at dimensions higher than 32, indicating overfitting.*
 
-This project utilizes the **MovieLens Tag Genome Dataset 2021**.
+---
 
-* **Source:** GroupLens
-* **Download:** [genome_2021.zip](https://grouplens.org/datasets/movielens/tag-genome-2021/)
-* **Storage:** The dataset was accessed directly from a personal Google Drive to enable persistent storage within Colab.
+## `genome-2021-movie-recommender`: Content-Based Recommender System (NLP)
+**Dataset:** [MovieLens Tag Genome 2021](https://grouplens.org/datasets/movielens/tag-genome-2021/)
 
-### Results & Performance
+### Implementation Details
+The objective was to predict user ratings by analyzing textual content from over 2.6 million raw movie reviews.
 
-The models were evaluated on a sample of 5,000 ratings against two baselines.
+* **Data Pipeline:** Raw reviews were aggregated by movie and cleaned (punctuation removal, stop words). The processed data was saved to a Parquet file checkpoint to bypass processing times on repeated runs.
+* **Memory Management:** Due to the dataset size (52,000+ movies), standard similarity matrix calculations caused memory overflows. An "on-the-fly" calculation method was implemented to compute similarity scores only for necessary target pairs during the prediction loop.
+* **Hardware:** **Google Colab Pro** High-RAM runtime was required to handle the large-scale text data processing.
 
-| Model | MAE | RMSE | Hit Ratio @ 10 |
+### Models Implemented
+1.  **TF-IDF + Cosine Similarity:** Weighs words by importance/frequency.
+2.  **Binary Counts + Jaccard Similarity:** Weighs words by simple presence/overlap.
+
+### Results
+Models were evaluated on a sample of 5,000 ratings using Mean Absolute Error (MAE) and Hit Ratio.
+
+| Model Strategy | MAE | RMSE | Hit Ratio (@10) |
 | :--- | :---: | :---: | :---: |
-| **Random Baseline** | 1.5861 | 1.9565 | N/A |
-| **Global Average Baseline** | 0.8355 | 1.0545 | N/A |
-| **TF-IDF + Cosine (Model 1)** | 0.7607 | 0.9855 | 0.20% |
-| **Binary + Jaccard (Model 2)** | **0.7593** | **0.9850** | *See Note* |
+| **Binary + Jaccard** | **0.7593** | **0.9850** | N/A |
+| TF-IDF + Cosine | 0.7607 | 0.9855 | 0.20% |
+| Global Average Baseline | 0.8355 | 1.0545 | - |
+| Random Baseline | 1.5861 | 1.9565 | - |
 
-#### Findings
-* **Accuracy:** Both content-based models significantly outperformed the Global Average baseline (MAE 0.8355). The **Binary + Jaccard model** achieved the best accuracy (MAE 0.7593), suggesting that simple word presence was a stronger signal than word frequency for this specific dataset.
-* **Hit Ratio:** The TF-IDF model achieved a Hit Ratio of 0.20%.
-* **Note:** The Jaccard Hit Ratio calculation was stopped due to excessive runtime (>2 hours) caused by dense array operations.
+*Finding:* The Binary + Jaccard model yielded the lowest error, suggesting that simple word presence was a more effective signal than term frequency for this specific review dataset.
