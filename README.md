@@ -1,26 +1,37 @@
 # Recommender Systems
 
-This repository contains my graduate-level coursework and independent experiments focused on building, optimizing, and evaluating recommendation algorithms. The projects range from Deep Learning-based Collaborative Filtering using PyTorch to Content-Based systems leveraging NLP on massive unstructured datasets.
+This repository contains two graduate-level projects on recommender systems: an optimized collaborative filtering study on MovieLens 100K, and a content-based system built from raw movie reviews at scale. Both were developed for CMP5104 (Recommender Systems) and focus on benchmarking classical architectures against neural and NLP-based alternatives.
 
-## Tech Stack & Skills
-* **Core:** Python, PyTorch (GPU), Scikit-learn, Pandas, NumPy
-* **Techniques:** Matrix Factorization, Neural Collaborative Filtering (NCF), TF-IDF, Cosine Similarity, Grid Search
-* **Optimization:** AdamW, ReduceLROnPlateau, Early Stopping, Gradient Descent
-* **Engineering:** GPU Acceleration, Pre-loaded GPU Tensors, Parquet Checkpointing
-* **Environment:** Google Colab Pro (High-RAM & GPU Runtime)
+---
+
+## Folder Structure
+```
+recommender-systems/
+├── ml-100k-parameter-optimizer/
+│ ├── ml-100k-parameter-optimizer.ipynb
+│ ├── learning-curve2.png
+│ ├── embedding_analysis.png
+│ ├── learning-curve2.png
+│ └── report-assignment2-ml100kParamOpt.pdf
+├── genome-2021-movie-recommender/
+│ ├── content-based-movie-recommender.ipynb
+│ └── report-assignment1-CBMR.pdf
+└── README.md
+
+```
 
 ---
 
 ## `ml-100k-parameter-optimizer`: Optimized Collaborative Filtering & NCF
-**Dataset:** [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/)
+**Dataset:** [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) - Harper, F. M., & Konstan, J. A. (2015). The MovieLens Datasets. *ACM TIIS*.
 
-### Implementation Details
-This project benchmarks five distinct model architectures to minimize prediction error (RMSE) on sparse user-item interaction data.
+### Methodology
 
-* **Architecture:** Models were implemented in PyTorch. To maximize training speed, the entire dataset was converted to tensors and loaded directly onto the GPU to eliminate data transfer overhead.
-* **Optimization:** Training utilized the **AdamW** optimizer (to decouple weight decay) and a **ReduceLROnPlateau** scheduler (halving the learning rate after 2 epochs of stagnation).
-* **Grid Search:** An extensive search was performed across 125 combinations of embedding dimensions (8-128), learning rates, and regularization strengths.
-* **Hardware:** Executed on **Google Colab Pro** to support intensive grid search iterations and GPU-resident training.
+- Implemented **five model architectures** in PyTorch: Bias-Only Baseline, Matrix Factorization (MF), MF with Bias, Neural Collaborative Filtering (NCF), and NCF without Bias.
+- Entire dataset was converted to GPU-resident tensors to eliminate data transfer overhead during training.
+- Conducted a **Grid Search over 125 hyperparameter combinations**: embedding dims `[8, 16, 32, 64, 128]`, learning rates `[0.001, 0.005, 0.01, 0.05, 0.1]`, and regularization strengths `[0.0, 1e-6, 1e-5, 1e-4, 1e-3]`.
+- Optimization stack: **AdamW** (decoupled weight decay), **ReduceLROnPlateau** scheduler (halves LR after 2 stagnant epochs), and **Early Stopping** (patience = 3).
+- Final benchmarking used **5-Fold Cross-Validation** on the optimal config: `Embedding Dim=32, LR=0.005, Reg=1e-6`.
 
 ### Results
 Models were evaluated using 5-Fold Cross-Validation. The optimal configuration was found to be `Embedding Dim=32`, `LR=0.005`, and `Reg=1e-06`.
@@ -33,32 +44,40 @@ Models were evaluated using 5-Fold Cross-Validation. The optimal configuration w
 | NCF (No Bias) | 1.6069 |
 | Bias Only Baseline | 2.7879 |
 
-*Finding:* The Matrix Factorization with Bias model achieved the lowest RMSE and fastest convergence, significantly outperforming the Neural Network (NCF) architectures on this specific dataset.
+> **Key Finding:** The Matrix Factorization with Bias achieved the lowest RMSE and fastest convergence. NCF architectures plateaued significantly higher (~1.6), likely because data sparsity makes dot-product approaches more suitable than deep networks at this dataset size.
 
-![Learning Curve Comparison](ml-100k-parameter-optimizer/learning-curve2.png)
-*Figure 1: Validation RMSE over 100 epochs. The Matrix Factorization model (Green) converges faster than Neural Network architectures.*
+<p align="center">
+  <img src="ml-100k-parameter-optimizer/learning-curve2.png" width="480"/>
+  <br><em>Figure 1: Validation RMSE over 100 epochs. MF with Bias (green) converges fastest and achieves the lowest error.</em>
+</p>
 
-![Embedding Size Analysis](ml-100k-parameter-optimizer/embedding_analysis.png)
-*Figure 2: Impact of embedding size on error. Performance degrades at dimensions higher than 32, indicating overfitting.*
+<p align="center">
+  <img src="ml-100k-parameter-optimizer/embedding_analysis.png" width="480"/>
+  <br><em>Figure 2: Embedding size vs. RMSE. Performance degrades beyond dim=32, indicating overfitting at higher capacities.</em>
+</p>
 
 ---
 
 ## `genome-2021-movie-recommender`: Content-Based Recommender System (NLP)
-**Dataset:** [MovieLens Tag Genome 2021](https://grouplens.org/datasets/movielens/tag-genome-2021/)
+**Dataset:** [MovieLens Tag Genome 2021](https://grouplens.org/datasets/movielens/tag-genome-2021/) — Vig, J., Sen, S., & Riedl, J. (2012). The Tag Genome. ACM TIIS.
 
-### Implementation Details
-The objective was to predict user ratings by analyzing textual content from over 2.6 million raw movie reviews.
+### Methodology
 
-* **Data Pipeline:** Raw reviews were aggregated by movie and cleaned (punctuation removal, stop words). The processed data was saved to a Parquet file checkpoint to bypass processing times on repeated runs.
-* **Memory Management:** Due to the dataset size (52,000+ movies), standard similarity matrix calculations caused memory overflows. An "on-the-fly" calculation method was implemented to compute similarity scores only for necessary target pairs during the prediction loop.
-* **Hardware:** **Google Colab Pro** High-RAM runtime was required to handle the large-scale text data processing.
+- Processed **2.6 million raw movie reviews** across 52,081 movies; text was cleaned (punctuation, numbers, stop words removed) and aggregated per movie.
+- Processed corpus was checkpointed to a **Parquet file** to avoid repeated preprocessing on Colab restarts.
+- Pre-computing a full 52K×52K similarity matrix caused memory crashes; resolved with an **on-the-fly similarity calculation** that only evaluates pairs relevant to each prediction.
+- Implemented two text representation strategies:
+  1. **TF-IDF + Cosine Similarity** — weights terms by importance relative to the corpus.
+  2. **Binary Counts + Jaccard Similarity** — weights terms by simple presence/absence overlap.
+- Top-N evaluation used a **user profile vector** (mean of liked-movie content vectors) compared against the full catalog to generate Top-10 lists.
 
-### Models Implemented
+###Results
 1.  **TF-IDF + Cosine Similarity:** Weighs words by importance/frequency.
 2.  **Binary Counts + Jaccard Similarity:** Weighs words by simple presence/overlap.
 
 ### Results
-Models were evaluated on a sample of 5,000 ratings using Mean Absolute Error (MAE) and Hit Ratio.
+
+Evaluated on a 5,000-rating sample from a 20% held-out test set.
 
 | Model Strategy | MAE | RMSE | Hit Ratio (@10) |
 | :--- | :---: | :---: | :---: |
@@ -67,4 +86,56 @@ Models were evaluated on a sample of 5,000 ratings using Mean Absolute Error (MA
 | Global Average Baseline | 0.8355 | 1.0545 | - |
 | Random Baseline | 1.5861 | 1.9565 | - |
 
-*Finding:* The Binary + Jaccard model yielded the lowest error, suggesting that simple word presence was a more effective signal than term frequency for this specific review dataset.
+> **Key Finding:** Both content-based models outperformed all baselines. Binary + Jaccard marginally edged out TF-IDF, suggesting word presence is a stronger signal than frequency weighting for this review corpus. The 0.2% Hit Ratio for TF-IDF, while low in absolute terms, is realistic for pure content-based retrieval over a 52K+ item catalog.
+
+---
+
+## Reproduction
+
+### Requirements
+
+```bash
+pip install torch scikit-learn pandas numpy nltk matplotlib seaborn
+```
+
+> A **Google Colab Pro** environment (High-RAM + GPU runtime) is recommended for both projects due to dataset size and grid search compute requirements.
+
+### `ml-100k-parameter-optimizer`
+
+1. Download [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) and place the `u.data` splits under `MyDrive/resources/ml-100k/ml-100k/u.data`.
+2. Open `ml-100k-parameter-optimizer/ml-100k-parameter-optimizer.ipynb` in Colab with a GPU runtime.
+3. Run all cells. Grid search (~125 configs) and 5-fold CV will execute sequentially.
+
+### `genome-2021-movie-recommender`
+
+1. Download [MovieLens Tag Genome 2021](https://grouplens.org/datasets/movielens/tag-genome-2021/) and place `ratings.json` and `metadata.json` files under `MyDrive/resources/genome_2021/movie_dataset_public_final/raw/`.
+2. Open `genome-2021-movie-recommender/content-based-movie-recommender.ipynb` in Colab with a **High-RAM** runtime.
+3. Run the preprocessing cell once. It cleans the 2.6M reviews and saves the result to `MyDrive/resources/processed_for_colab/cleaned_movie_docs.parquet`.
+4. On subsequent runs, use the "New Setup" cell to load directly from the Parquet checkpoint.
+
+---
+
+## Citation
+
+If you reference this work, please cite as:
+
+@misc{aygun2025recommender,
+  author       = {Aygün, Esranur},
+  title        = {Recommender Systems: Collaborative Filtering and Content-Based Methods},
+  year         = {2025},
+  howpublished = {Graduate Coursework Repository},
+  url          = {https://github.com/fukichime/Recommender-Systems}
+}
+
+---
+
+### Datasets
+
+Harper, F. M., & Konstan, J. A. (2015). The MovieLens Datasets: History and Context.
+ACM Transactions on Interactive Intelligent Systems, 5(4), 1–19.
+https://doi.org/10.1145/2827872
+
+Vig, J., Sen, S., & Riedl, J. (2012). The Tag Genome: Encoding Community Knowledge
+to Support Novel Interaction. ACM Transactions on Interactive Intelligent Systems, 2(3).
+https://doi.org/10.1145/2362394.2362395
+
